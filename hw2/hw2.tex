@@ -1,0 +1,595 @@
+\documentclass{article}
+\include{hwdefs}
+\begin{document}
+\author{Chun-Wei Liu}
+\setcounter{HW}{2}
+\title{COMP  790-124, HW\theHW}
+\maketitle
+
+
+{ Deadline: 11/4/2014 11:59PM EST}
+
+{ Submit \texttt{hw\theHW.pdf} by e-mail to \texttt{vjojic+comp790+hw\theHW@cs.unc.edu}
+
+
+
+\noindent\rule{\textwidth}{3pt}
+
+
+
+
+In the next few problems we will derive and implement an ADMM algorithm for logistic regression with a fused lasso penalty.  You can refer to the ADMM write up available on the course website  \url{http://www.cs.unc.edu/~vjojic/comp790/notes/ADMMFLSA.pdf}, but note that, while there are similarities with the problems below, there are differences as well.
+
+% Problem 1
+\newproblem{1pt}
+The optimization problem for logistic regression with a fused lasso penalty is given as
+\BEAS
+\mathop{\textrm{minimize}}_{\ww} && \sum_i \mylog{1 + \myexp{-y_i(\xx_i\ww)}} + \\
+&&\lambda\nrmo{\ww} + \mu\nrmo{\DD\ww}.
+\EEAS
+We are going to introduce new variables $\zz^0, \zz^1, \zz^2$ and reformulate the problem
+\BEAS
+\mathop{\textrm{minimize}}_{\ww,\zz^0,\zz^1,\zz^2} && \sum_i \mylog{1 + \myexp{-y_iz^0_i}} + \lambda\nrmo{\zz^1} + \mu\nrmo{\zz^2}\\
+\textrm{subject to} && z^0_i = \xx_i\ww, i=1,\dots n \\
+&& \zz^1 = \ww \\
+&& \zz^2 = \DD\ww
+\EEAS
+
+Write out the augmented lagrangian for the above problem
+\BEAS
+\textrm{AL}(\ww,\zz^0,\zz^1,\zz^2,\uu^0,\uu^1,\uu^2) &=& \sum_i \mylog{1 + \myexp{-y_iz^0_i}} + \lambda\nrmo{\zz^1} + \mu\nrmo{\zz^2} \\
+&+&  \left<\uu^0,\zz^0-X\ww\right> + \left<\uu^1,\zz^1-\ww\right> + \left<\uu^2,\zz^2-D\ww\right>\\
+&+&  \frac{\rho}{2}\nrmt{\zz^0 - X\ww}^2 \\
+&+&  \frac{\rho}{2}\nrmt{\zz^1 - \ww}^2 \\
+&+&  \frac{\rho}{2}\nrmt{\zz^2 - D\ww}^2
+\EEAS
+
+Hint: Make sure that you have all the terms from the objective, that is logistic regression and the two norms. For each constraint you should have a term that involves the dual variables, for example $u^0_i(z^0_i - \xx_i\ww)$, and a term that augments the lagrangian, for example $\frac{\rho}{2}\nrmt{z^0_i - \xx_i\ww}^2$.
+
+% Problem 2
+\newproblem{1pt}
+Implement function that computes the value of augmented lagrangian
+\begin{verbatim}
+function val = computeAL(y,X,D,lambda,mu,rho,w,z0,z1,z2,u0,u1,u2)
+val = sum(log(1+exp(-y.*z0))) + lambda*norm(z1,1) + mu*norm(z2,1)... % data term
+    + u0'*(z0-X*w) + u1'*(z1-w) + u2'*(z2-D*w)...  % penalty
+    + 0.5*rho*(norm(z0-X*w)^2 + norm(z1-w)^2 + norm(z2-D*w)^2);  % lagrangian
+\end{verbatim}
+
+% Problem 3
+\newproblem{1pt}
+We will use superscript $k$ to indicate the iteration, so for example $\ww^k$ denotes the state of variable $\ww$ in the $k^\tth$ iteration. Collect the terms in the augmented lagrangian that involve $\ww$, complete the square and plug in the resulting expression below
+\BEAS
+\ww^k &=& \argmin_\ww \left<\uu^{0,k-1},\zz^{0,k-1}-X\ww\right> + \left<\uu^{1,k-1},\zz^{1,k-1}-\ww\right> + \left<\uu^{2,k-1},\zz^{2,k-1}-D\ww\right>\\
+&+&  \frac{\rho}{2}\nrmt{\zz^{0,k-1} - X\ww}^2
+     +\frac{\rho}{2}\nrmt{\zz^{1,k-1} - \ww}^2
+     +\frac{\rho}{2}\nrmt{\zz^{2,k-1} - D\ww}^2 \\
+&=&  \argmin_\ww \frac{\rho}{2}\nrmt{X\ww - (\zz^{0,k-1} +\frac{\uu^{0,k-1}}{\rho})}^2 \\
+&+&   \frac{\rho}{2}\nrmt{\ww - (\zz^{1,k-1} + \frac{\uu^{1,k-1}}{\rho})}^2
+     +\frac{\rho}{2}\nrmt{D\ww - (\zz^{2,k-1} + \frac{\uu^{2,k-1}}{\rho})}^2
+\EEAS
+When completing squares here do it so that $\ww,\uu_0,\zz_0$ occur under one, $\ww,\uu_1,\zz_1$ occur under another, and $\ww,\uu_1,\zz_2$ occur under yet another norm term.
+
+Same thing for $z^0_i$, note that here we are considering just a single $z^0_i$ not the full vector. You can convince yourself that if you write out the objective for the full vector it is separable into objectives across $z^0_i$.
+\BEAS
+z_i^{0,k} &=& \argmin_{z_i^0}   \frac{\rho}{2}(z^0_i - \xx_i\ww^k)^2 + u^{0,k-1}_i(z^0_i - \xx^{k-1}_i\ww^k) + \mylog{1 + \myexp{-y_iz^0_i}} \\
+&=&  \argmin_{z_i^0} \frac{\rho}{2}(z^0_i - (\xx_i\ww^k - \frac{1}{\rho}u^{0,k-1}_i))^2 + \mylog{1 + \myexp{-y_iz^0_i}}
+\EEAS
+And once more for $z^1_i$, using the fact that $\nrmo{\zz^1} = \sum_i |z^1_i|$
+\BEAS
+z_i^{1,k} &=& \argmin_{z_i^1}   \frac{\rho}{2}(z^1_i - w^{k}_i)^2 + (z^1_i-w^{k}_i)u^{k-1}_i + \lambda |z^1_i| \\
+&=&  \argmin_{z_i^1} \frac{1}{2}(z^1_i - (w^{k}_i - \frac{1}{\rho}u^{1,k-1}_i))^2 + \frac{\lambda}{\rho} |z^1_i|
+\EEAS
+Finally, do the same for $z^2_i$
+\BEAS
+z_i^{2,k} &=& \argmin_{z_i^2}  \frac{1}{2}(z^2_i - (D_i\ww^{k} - \frac{1}{\rho}u^{2,k-1}_i))^2 + \frac{\mu}{\rho} |z^2_i|.
+\EEAS
+
+% Problem 4
+\newproblem{1pt} Copy over the update for $\ww$ from above
+\BEAS
+\ww^k &=& \argmin_\ww  \frac{\rho}{2}\nrmt{X\ww - (\zz^{0,k-1} +\frac{\uu^{0,k-1}}{\rho})}^2 \\
+&+&   \frac{\rho}{2}\nrmt{\ww - (\zz^{1,k-1} + \frac{\uu^{1,k-1}}{\rho})}^2
+     +\frac{\rho}{2}\nrmt{D\ww - (\zz^{2,k-1} + \frac{\uu^{2,k-1}}{\rho})}^2
+\EEAS
+Note that $\ww = \II\ww$ and refer to the appendix of the Lecture 4 notes on how to stack these two linear systems, as well as code to do it. Of course, the ADMM writeup also has some of this. Implement a function that gives update for $\ww$
+\begin{verbatim}
+function w = updatew(X,z0,z1,z2,u0,u1,u2,D,rho)
+A = sqrt(rho)*[X;eye(length(z1));D];
+b = sqrt(rho)*[z0+u0/rho;z1+u1/rho;z2+u2/rho];
+w = A\b;
+\end{verbatim}
+
+\newproblem{1pt}
+To update $z^0_i$ we will be solving an optimization problem
+\[
+\mathop{\textrm{minimize}}_{z \in \reals} \mylog{1 + \myexp{-yz}} + \gamma(z - a)^2.
+\]
+Note that $z$ is a scalar, so the objective is univariate.
+Here is a an implementation of Newton algorithm with backtracking, it takes a function handle and starting value as a input.
+
+
+\begin{verbatim}
+function z = newtonWolfeBacktrack(objective, initZ)
+% newtonWolfeBacktrack solves an unconstrained optimization problem
+%    using Newton's method with backtracking and the Weak Wolfe
+%    condition for backtracking termination.
+%
+% z = newtonWolfeBacktrack(objective, initZ)
+%   objective  a handle of function that take input z and returns
+%              the values of the objective, the first, and the
+%              second derivative at z
+%   initZ      initial value of z
+%
+ALPHA = 0.05;
+BETA = 0.5;
+TOL = 1e-6;
+MAX_ITER = 100;
+z = initZ;
+for it=1:MAX_ITER
+    [val,d,dd] = objective(z);
+
+    % Newton direction
+    dz = -d/dd;
+
+    % we are done if derivative is small enough
+    if abs(dz) < TOL
+        break;
+    end
+
+    % backtracking with the Wolfe condition check
+    step = 1;
+    while objective(z + step*dz) > val + ALPHA*step*dz*d
+          step = step*BETA;
+    end
+    z = z + step*dz;
+end
+\end{verbatim}
+Save this file as \texttt{newtonWolfeBacktrack.m}. In the code above, the while loop is terminated when the Wolfe condition is satisfied. Read the code and explain what the Wolfe condition is trying to accomplish. The Wolfe condition is that the reduction in the objective should be proportional to both the step length and the directional directive.
+
+Now we will write a function that computes the objective and its derivatives.
+\begin{verbatim}
+function [val,d,dd] = logRegGaussPrior(z,y,a,gamma)
+val = log(1 + exp(-y*z)) + gamma*(z-a)^2;
+if nargout > 1 % caller asked for derivatives
+    d = 2*gamma*z - 2*gamma*a - y/(exp(y*z) + 1); % first derivative
+    dd = (exp(-y*z)/(exp(-y*z) + 1) - exp(-2*y*z)/(exp(-y*z) + 1)^2)*y^2 ...
+       + 2*gamma; % second derivative
+end
+\end{verbatim}
+
+An example of how to use these two pieces together:
+\begin{verbatim}
+y = 1; a = 0.1; gamma = 0.5;
+f = @(z) logRegGaussPrior(z,y,a,gamma);
+z = newtonWolfeBacktrack(f,0);
+\end{verbatim}
+Of course you will be plugging in different values of \texttt{y,a,gamma}. Note that \texttt{f} is really a function with some arguments to \texttt{logRegGaussPrior} hardcoded. In the above example \texttt{0.1} will be hardcoded in the definition of \texttt{f}.  So even if you subsequently change variable \texttt{a}, the function \texttt{f} will still supply \texttt{0.1} as the third argument to \texttt{logRegGaussPrior}.
+
+Use the \texttt{newtonWolfeBacktrack} and \texttt{logRegGaussianPrior} to implement
+\begin{verbatim}
+function new_z0i = updatez0i(z0i, xi, yi, w, u0i, rho)
+z = z0i;
+y = yi; 
+a = xi'*w - u0i/rho; 
+gamma = rho/2;
+
+f = @(z) logRegGaussPrior(z,y,a,gamma);
+new_z0i = newtonWolfeBacktrack(f,z);
+\end{verbatim}
+
+% Problem 6
+\newproblem{1pt} Copy over update for $z^1$ from above
+\[
+z_i^{1,k} = \argmin_{z_i^1} \frac{1}{2}(z^1_i - (w^{k}_i - \frac{1}{\rho}u^{1,k-1}_i))^2 + \frac{\lambda}{\rho} |z^1_i|.
+\]
+
+Refer to ADMM writeup on how to solve this in a closed form the problem of this shape and write it out here
+\[
+z_i^{1,k} = S(w^{k}_i - \frac{1}{\rho}u^{1,k-1}_i, \frac{\lambda}{\rho}).
+\]
+write code to implement this update
+\begin{verbatim}
+function z1i = updatez1i(wi, u1i, lambda, rho)
+z1i = shrinkThreshold(wi - u1i/rho,lambda/rho);
+\end{verbatim}
+
+% Problem 7
+\newproblem{1pt} Copy over update for $z_i^2$ from above
+\[
+z_i^{2,k} = \argmin_{z_i^2}  \frac{1}{2}(z^2_i - (D_i\ww^{k} - \frac{1}{\rho}u^{2,k-1}_i))^2 + \frac{\mu}{\rho} |z^2_i|.
+\]
+
+Refer to ADMM writeup on how to solve this in a closed form the problem of this shape and write it out here
+\[
+z_i^{2,k} = S(D_i\ww^{k} - \frac{1}{\rho}u^{2,k-1}_i, \frac{\mu}{\rho}).
+\]
+write code to implement this update
+\begin{verbatim}
+function z2i = updatez2i(Di, w, u2i, mu, rho)
+z2i = shrinkThreshold(Di'*w - u2i/rho,mu/rho);
+\end{verbatim}
+
+% Problem 8
+\newproblem{2pt} Putting all of this together
+\begin{verbatim}
+function w = solveLogRegFusedLasso(y,X,D)
+rho = 1;
+lambda = 3;
+mu = 5;
+N = length(y); assert(N == size(X,1));
+p = size(X,2); assert(p == size(D,2));
+e = size(D,1);
+w = zeros(p,1);
+z0 = zeros(N,1); u0 = zeros(N,1);
+z1 = zeros(p,1); u1 = zeros(p,1);
+z2 = zeros(e,1); u2 = zeros(e,1);
+MAXIT = 100;
+
+for it=1:MAXIT
+    before = computeAL(y,X,D,lambda,mu,rho,w,z0,z1,z2,u0,u1,u2);
+    w = updatew(X,z0,z1,z2,u0,u1,u2,D,rho);
+    after = computeAL(y,X,D,lambda,mu,rho,w,z0,z1,z2,u0,u1,u2);
+    assert(after < before + 1e-6);
+
+    before = after;
+    for i=1:length(y)
+        z0(i) = updatez0i(z0(i), X(i,:)', y(i), w, u0(i), rho);
+    end
+    after = computeAL(y,X,D,lambda,mu,rho,w,z0,z1,z2,u0,u1,u2);
+    assert(after < before + 1e-6);
+
+    before = after;
+    for i=1:length(z1)
+        z1(i) = updatez1i(w(i), u1(i), lambda, rho);
+    end
+    after = computeAL(y,X,D,lambda,mu,rho,w,z0,z1,z2,u0,u1,u2);
+    assert(after < before + 1e-6);
+
+    before = after;
+    for i=1:size(D,1)
+        z2(i) = updatez2i(D(i,:)', w, u2(i), mu, rho);
+    end
+    after = computeAL(y,X,D,lambda,mu,rho,w,z0,z1,z2,u0,u1,u2);
+    assert(after < before + 1e-6);
+
+    u0 = u0 + rho*(z0-X*w);
+    u1 = u1 + rho*(z1-w);
+    u2 = u2 + rho*(z2-D*w);
+end
+\end{verbatim}
+If any of the asserts fail, it is most likely that you have a bug in your update. Remember the updates are derived so as to minimize the augmented lagrangian. If your update does not reduce the augmented lagrangian, this is what the asserts check, then there is a bug.
+
+Load \texttt{hw2.mat} and run your code on \texttt{y,X,lambda,mu} in that environment. Report \texttt{w}
+\begin{verbatim}
+w =
+
+    0.4591
+    0.4877
+    0.1417
+    0.0923
+    0.1594
+    0.0000
+    0.0000
+    0.0000
+    0.0000
+    0.0000
+    0.4591
+    0.4877
+    0.1417
+    0.0923
+    0.1594
+    0.0000
+    0.0000
+    0.0000
+    0.0000
+    0.0000
+\end{verbatim}
+
+% Problem 9
+\newproblem{1pt} Poisson distribution is used to model count data.
+\[
+p(x = k | \lambda) = \frac{\lambda^k\myexp{-\lambda}}{k!}.
+\]
+Note that poisson models counts, including count of 0. Recall that $0! = 1$.
+Write it as an exponential family member
+\BEAS
+p(x = k | \lambda) &=& \frac{1}{k!}\myexp{k \mylog\lambda - \lambda} \\
+&=& \frac{1}{k!}\myexp{\left<k,\mylog\lambda\right> - \lambda} \\
+p(x = k | \eta) &=& \frac{1}{k!}\myexp{\left<k,\eta\right> - \myexp\eta}
+\EEAS
+
+Write out base measure, sufficient statistic, natural parameter $\eta$ in terms of $\lambda$, log-normalizing function
+\BEAS
+h(x) &=& \frac{1}{x!} \\
+T(x) &=& x \\
+\eta &=& \mylog{\lambda} \\
+A(\eta) &=& \myexp{\eta}
+\EEAS
+Compute derivative of the log-normalizing function
+\[
+\frac{\partial}{\partial \eta} A(\eta) = \myexp{\eta}
+\]
+Compute the inverse mapping of the derivative of the log-normalizing function
+\[
+\left(\frac{\partial}{\partial \eta} A\right)^{-1} =\mylog{\eta}
+\]
+Let the observed counts be
+\[
+\xx = \begin{bmatrix} 1\\ 4 \\ 5 \\ 10 \\ 11 \\3 \end{bmatrix}
+\]
+The sample empirical mean of sufficient statistic is, plug-in value,
+\[
+\sum_{i} \frac{1}{N} T(x_i)  = 5.6667.
+\]
+Then the maximum likelihood estimate for $\eta$ of the Poisson distribution in exponential family form is, plug-in value,
+\[
+\left(\frac{\partial}{\partial \eta} A\right)^{-1}\left(\sum_{i} \frac{1}{N} T(x_i)\right) = 1.7346.
+\]
+
+% Problem 10
+\newproblem{1pt}
+Now to confirm that we did this right we are going to explicitly derive maximum likelihood estimate for Poisson distribution's parameter. The log-likelihood is
+\[
+\LL(\eta;\xx) = \sum_{i}^n \log h(x_i) + \eta T(x_i) - A(\eta)
+\]
+Plug-in $h(x_i),T(x_i),A(\eta)$ for Poisson distribution.
+\[
+\LL(\eta;\xx) = \sum_{i}^n \log \frac{1}{x_i!} + \eta x_i - \exp \eta.
+\]
+Take a derivative of log-likelihood with respect to $\eta$ and equate it to zero. Solve the equation for $\eta$
+\[
+\eta^{\textrm{ML}} = \log \frac{1}{n} \sum^n_i x_i.
+\]
+
+\newproblem{1pt}
+In Matlab, run following code
+\begin{verbatim}
+example = poissrnd(15,300,1);
+hist(example,1:50)
+xlabel('count');ylabel('number of times count was observed');
+hwplotprep
+print -dpdf aPoissonExample.pdf
+\end{verbatim}
+Replace \texttt{emptiness.pdf} with \texttt{aPoissonExample.pdf} below.
+
+\begin{figure}[H]
+\begin{center}
+\includegraphics[scale=0.5]{aPoissonExample.pdf}
+\caption{This is a Poisson distribution example.}
+\end{center}
+\end{figure}
+
+Load \texttt{hw2.mat} and run following code
+\begin{verbatim}
+hist(counts,1:50)
+xlabel('count');ylabel('number of times count was observed');
+hwplotprep
+print -dpdf HW2Counts.pdf
+\end{verbatim}
+
+Replace \texttt{emptiness.pdf} with \texttt{HW2Counts.pdf} below.
+
+\begin{figure}[H]
+\begin{center}
+\includegraphics[scale=0.5]{HW2Counts.pdf}
+\caption{Histogram for counts in given data.}
+\end{center}
+\end{figure}
+Comment on the differences between the two histograms and a possible cause. The histogram of count data has two peaks. Given the information that Poisson distribution is used to model count data, a possible cause is that the counts were actually came from a mixture of two Poisson distributions.
+
+\newproblem{1pt}
+We will model a vector of counts $\xx$ as samples from a mixture of two Poisson distributions. The graphical model is simple
+\begin{center}
+\begin{tikzpicture}[minimum size=1.25cm,->,shorten >=1pt,auto,node distance=1.75cm,semithick]
+\tikzstyle{var}=[circle,fill=white,draw=black,text=black]
+\tikzstyle{param}=[circle,fill=white,draw=black,text=black]
+\node (Plate) [minimum width=2.25cm,minimum height=4.5cm,rounded corners=2pt,dashed,fill=none,draw=black] at ( 0.75,0) {};
+\node (PlateLabel) [minimum size=0.5cm,anchor=south east] at  (Plate.south east) {N};
+\node[var] (X1) at (0.75,1)  {$z_{i}$};
+\node[var] (X2)  [fill=gray] at (0.75,-1) {$x_{i}$};
+\node (Plate) [minimum width=2.25cm,minimum height=5cm,rounded corners=2pt,dashed,fill=none,draw=black] at ( -1.75,0.5) {};
+\node (PlateLabel) [minimum size=0.5cm,anchor=south east] at  (Plate.south east) {2};
+\node[param] (eta) at (-1.75,-1){$\eta_c$};
+\node[param] (pi) at   (-1.75,2)  {$\pi_c$};
+\path (X1) edge (X2);
+\path (eta) edge (X2);
+\path (pi) edge (X1);
+\end{tikzpicture}
+\end{center}
+We will now derive and implement an EM algorithm for a mixture of two Poisson distributions.
+\BEAS
+p(z) &=& \begin{cases}
+\pi_1, & z = 1\\
+\pi_2, & z = 2\\
+\end{cases} \\
+&s.t& \pi_1 + \pi_2 = 1 \\
+p(x|z) &=& h(x)\myexp{\eta_z T(x) - A(\eta_z)}
+\EEAS
+Recall the structure of the an algorithm
+\BEAS
+E: q^{\textrm{new}} &=& \argmax_q  \sum_z q(\zz) \log p(\xx,\zz|\eta) - \sum_{\zz} q(\zz)\log q(\zz) \\
+M: \eta^{\textrm new} &=& \argmax_\eta  \sum_{\zz} q^{\textrm{new}}(\zz) \log p(\xx,\zz|\eta) -\sum_{\zz} q^{\textrm{new}}(\zz)\log q^{\textrm{new}}(\zz)
+\EEAS
+In the case of exact EM $q(\zz) = p(\zz|\xx,\eta)$, further we note that computing $p(\zz|\xx,\eta)$ in the above model corresponds to marginalization in the graphical model
+\begin{center}
+\begin{tikzpicture}[minimum size=1.25cm,->,shorten >=1pt,auto,node distance=1.75cm,semithick]
+\tikzstyle{var}=[circle,fill=white,draw=black,text=black]
+\tikzstyle{param}=[circle,fill=gray,draw=black,text=black]
+\node (Plate) [minimum width=2.25cm,minimum height=4.5cm,rounded corners=2pt,dashed,fill=none,draw=black] at ( 0.75,0) {};
+\node (PlateLabel) [minimum size=0.5cm,anchor=south east] at  (Plate.south east) {N};
+\node[var] (X1) at (0.75,1)  {$z_{i}$};
+\node[var] (X2)  [fill=gray] at (0.75,-1) {$x_{i}$};
+\node (Plate) [minimum width=2.25cm,minimum height=5cm,rounded corners=2pt,dashed,fill=none,draw=black] at ( -1.75,0.5) {};
+\node (PlateLabel) [minimum size=0.5cm,anchor=south east] at  (Plate.south east) {2};
+\node[param] (eta) at (-1.75,-1){$\eta_c$};
+\node[param] (pi) at   (-1.75,2)  {$\pi_c$};
+\path (X1) edge (X2);
+\path (eta) edge (X2);
+\path (pi) edge (X1);
+\end{tikzpicture}
+\end{center}
+Are $z_i$ conditionally independent given $\pi$ and $\xx$? Yes.
+Describe reasoning behind your observation using Bayes ball paths.
+There is only one common node $\pi$ connect each $z_i$. 
+Given $\pi$, the message passing at $\pi$ is like Figure~\ref{fig:message_passing}, which suggests not path from either way. 
+So $z_i$ cannot communicate each others via $\pi$. 
+On the other hand, $z_i$ cannot communicate each others through $x_i$ and then via $\eta$ because of the same reason.
+\begin{figure}[H]
+\begin{center}
+\includegraphics[scale=0.5]{message_passing.png}
+\caption{Illustration of Bayes ball path.}
+\label{fig:message_passing}
+\end{center}
+\end{figure}
+
+
+% Problem 13
+\newproblem{1pt} We will now compute $q(z_i) = p(z_i | x_i,\eta)$ using Bayes rule
+\BEAS
+q(z_i) &=& p(z_i | x_i,\eta) \\
+&=& \frac{p(x_i|z_i,\eta)p(z_i|\eta)}{\sum_{z_i}p(x_i|z_i,\eta)p(z_i|\eta)} \\
+&where& p(x_i|z_i,\eta) = \frac{1}{x!}\myexp{\eta_{z_i}x_i - \myexp{\eta_{z_i}}}\\
+&& p(z_i|\eta) = \pi_{z_i}
+\EEAS
+Note that you can use $\pi_{z_i}$ and $\eta_{z_i}$ notation to denote parameters of class $z_i$.
+Write a Matlab function that computer $q(z_i)$
+\begin{verbatim}
+function qzi = computeQ(xi,etas,pis)
+for c = 1:2
+    qzi(c) = log(1/factorial(xi)*exp(etas(c)*xi-exp(etas(c)))) + log(pis(c));
+end
+qzi = exp(qzi - logsum(qzi));
+
+function y = logsum(x)
+x = x(:);
+m = max(x);
+y = log(sum(exp(x-m))) + m;
+\end{verbatim}
+
+% Problem 14
+\newproblem{1pt} Recall M-step, where we eliminated portions of the objective that do not depend on $\eta$
+\[
+M: \eta^{\textrm new} = \argmax_\eta  \sum_{\zz} q^{\textrm{new}}(\zz) \log p(\xx,\zz|\eta)
+\]
+Show that the above expression is equal to
+\[
+M: \eta^{\textrm new} = \argmax_\eta  \sum_i q^{\textrm{new}}(z_i)\log p(x_i,z_i|\eta)
+\]
+We can say that
+\[
+p(\xx,\zz|\eta) = \prod_i p(x_i,z_i|\eta)
+\]
+because we assume data is i.i.d.
+Using the above equality and
+\[
+\sum_{\zz} q(\zz) f(z_i) = \sum_{z_i} q(z_i) f(z_i)
+\]
+we can rewrite the M-step update (eliminating constant term)
+\[
+M: \eta^{\textrm new} = \argmax_\eta \sum_i q^{new}(z_i)(x_i\eta_i-\exp\eta_i)
+\]
+Take the derivative of the objective under the  $\argmax$ and set it to $0$ to obtain updates
+\BEAS
+\eta_1 &=& \mylog{\frac{\sum_i q(z_i = 1) x_i}{\sum_i q(z_i = 1)}} \\
+\eta_2 &=& \mylog{\frac{\sum_i q(z_i = 2) x_i}{\sum_i q(z_i = 2)}}
+\EEAS
+write matlab code that implements M-step
+\begin{verbatim}
+function [etas,pis] = updateParameters(q,x)
+pis = zeros(2,1);
+for i=1:length(x)
+    for c=1:2
+        pis(c) = pis(c) + q(c,i);
+    end
+end
+pis = pis/sum(pis);
+
+etas = zeros(2,1);
+for c=1:2
+    for i=1:length(x)        
+        etas(c) = etas(c) + q(c,i)*x(i);
+    end
+end
+etas = log(etas./sum(q,2));
+\end{verbatim}
+
+
+\newproblem{2pt} Putting it all together,
+\begin{verbatim}
+function [etas,pis] = EMMoP(x)
+etas = log(mean(x) + 0.0001*rand(2,1));
+pis = 0.5*ones(2,1);
+q = 0.5*ones(2,length(x));
+
+MAXIT = 100;
+eps = 1e-3;
+
+for it=1:MAXIT
+    before = computeBound(q,x,etas,pis);
+    for i=1:length(x)
+        q(:,i) = computeQ(x(i),etas,pis);
+    end
+    after = computeBound(q,x,etas,pis);
+    assert(after + eps > before);
+    before = after;
+    [etas,pis] = updateParameters(q,x);
+    after = computeBound(q,x,etas,pis);
+    assert(after + eps > before);
+    bounds(it) = after;
+    plot(bounds);
+    drawnow;
+end
+
+function bound = computeBound(q,x,etas,pis)
+bound = 0;
+for i=1:length(x)
+    for c=1:2
+        bound = bound + q(c,i)*(etas(c)*x(i)-exp(etas(c))+log(pis(c)));
+    end
+end
+for i=1:length(x)
+    for c=1:2
+        bound = bound - q(c,i)*log(q(c,i));
+    end
+end
+\end{verbatim}
+Load \texttt{hw2.mat} and run this code on \texttt{counts}. Report here resulting \texttt{etas,pis}
+\begin{verbatim}
+etas =
+
+    2.5517
+    0.7483
+
+
+pis =
+
+    0.6647
+    0.3353
+
+\end{verbatim}
+\newproblem{1pt} Now we convert the above EM algorithm to K-means analog for Poisson distribution. Change function \texttt{computeQ} you implemented earlier to assign all probability to the most likely class, so each \texttt{qzi} should be binary.
+\begin{verbatim}
+function qzi = computeQ(xi,etas,pis)
+for c = 1:2
+    qzi(c) = log(1/factorial(xi)*exp(etas(c)*xi-exp(etas(c)))) + log(pis(c));
+end
+qzi = exp(qzi - logsum(qzi));
+qzi(1) = qzi(1) > 0.5;
+qzi(2) = qzi(2) > 0.5;
+\end{verbatim}
+Load \texttt{hw2.mat} and run \texttt{EMMoP} code on \texttt{x}. Report here resulting \texttt{etas,pis}
+\begin{verbatim}
+etas =
+
+    0.7534
+    2.5571
+
+
+pis =
+
+    0.3400
+    0.6600
+\end{verbatim}
+
+\end{document}

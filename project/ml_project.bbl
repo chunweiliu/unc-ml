@@ -1,0 +1,29 @@
+\begin{thebibliography}{1}
+
+\bibitem{hong2014statistical}
+Hong, Y., Davis, B., Marron, J., Kwitt, R., Singh, N., Kimbell, J.S., Pitkin,
+  E., Superfine, R., Davis, S.D., Zdanski, C.J.,  et~al.:
+\newblock Statistical atlas construction via weighted functional boxplots.
+\newblock Medical image analysis \textbf{18}(4) (2014)  684--698
+
+\bibitem{han2014robust}
+Han, D., Gao, Y., Wu, G., Yap, P.T., Shen, D.:
+\newblock Robust anatomical landmark detection for mr brain image registration.
+\newblock In: Medical Image Computing and Computer-Assisted
+  Intervention--MICCAI 2014.
+\newblock Springer (2014)  186--193
+
+\bibitem{ehrhardt2010automatic}
+Ehrhardt, J., Werner, R., Schmidt-Richberg, A., Handels, H.:
+\newblock Automatic landmark detection and non-linear landmark-and
+  surface-based registration of lung ct images.
+\newblock Medical Image Analysis for the Clinic-A Grand Challenge, MICCAI 2010
+  (2010)  165--174
+
+\bibitem{marron2007distance}
+Marron, J., Todd, M.J., Ahn, J.:
+\newblock Distance-weighted discrimination.
+\newblock Journal of the American Statistical Association \textbf{102}(480)
+  (2007)  1267--1271
+
+\end{thebibliography}

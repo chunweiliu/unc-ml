@@ -1,0 +1,11 @@
+function [pall,grad] = softmaxLoss(y,Wvec,X,lambda,C)
+N = length(y);
+labelMatrix = full(sparse(y,1:length(y),1)); % class indicator matrix
+W = reshape(Wvec,[C length(Wvec(:))/C]);
+p = W*X;
+p = p - repmat(max(p,[],1),[C 1]);
+p = exp(p);
+p = p./repmat(sum(p),[C 1]);
+pall = 1/N*sum(sum(labelMatrix.*log(p))) + lambda/2*sum(sum(W(:).^2));
+grad = 1/N*(labelMatrix-p)*X' + lambda*W;
+grad = grad(:);
